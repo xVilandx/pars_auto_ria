@@ -38,7 +38,7 @@ def parse_id_announcements():
     write_to_csv('id_announcement.csv', [['id_auto', 'page_url'], ])
 
     for page in range(int(read_from_csv('page.csv')[1][0])):
-        response = requests.get(f'https://auto.ria.com/uk/legkovie/?page={page + 100}')
+        response = requests.get(f'https://auto.ria.com/uk/legkovie/?page={page + 1}')
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'lxml')
         announcements = soup.findAll('section', class_='ticket-item')
