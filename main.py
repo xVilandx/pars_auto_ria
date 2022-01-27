@@ -3,25 +3,39 @@ from bs4 import BeautifulSoup
 import requests
 
 
-def write_to_csv(filename, data, delimiter=","):
+def _write_to_csv(filename, data, delimiter=","):
     with open(filename, "w") as csv_file:
         writer = csv.writer(csv_file, delimiter=delimiter)
         writer.writerows(data)
 
 
-def add_to_csv(filename, data, delimiter=","):
+def _add_to_csv(filename, data, delimiter=","):
     with open(filename, "a") as csv_file:
         writer = csv.writer(csv_file, delimiter=delimiter)
         writer.writerows(data)
 
 
-def read_from_csv(filename):
+def _read_from_csv(filename):
     with open(filename, 'r') as csv_file:
         reader = csv.reader(csv_file, delimiter=",")
         data = []
         for row in reader:
             data.append(row)
         return data
+
+
+def _try_to_find_info_used_auto(soup, params_first, params_second):
+    try:
+        return soup.find(**params_first).findNext(**params_second).text
+    except AttributeError:
+        return 'None'
+
+
+def _try_to_find_info_new_auto(soup, params_first, params_second):
+    try:
+        return soup.find(**params_first).findNext(**params_second).text
+    except AttributeError:
+        return 'For more information contact the dealership'
 
 
 def parse_page():
@@ -31,13 +45,13 @@ def parse_page():
     last_page = soup.findAll('a', class_='page-link')
     last_page = last_page[len(last_page) - 2].text.replace(' ', '')
 
-    write_to_csv('page.csv', [['last_page'], [last_page]])
+    _write_to_csv('page.csv', [['last_page'], [last_page]])
 
 
 def parse_id_announcements():
-    write_to_csv('id_announcement.csv', [['id_auto', 'page_url'], ])
+    _write_to_csv('id_announcement.csv', [['id_auto', 'page_url'], ])
 
-    for page in range(int(read_from_csv('page.csv')[1][0])):
+    for page in range(int(_read_from_csv('page.csv')[1][0])):
         response = requests.get(f'https://auto.ria.com/uk/legkovie/?page={page + 1}')
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'lxml')
@@ -46,102 +60,85 @@ def parse_id_announcements():
             break
 
         for announcement in announcements:
-            id_auto = announcement.find("div", class_="hide").get("data-id")
-            page_url = announcement.find("a", class_="m-link-ticket").get("href")
-            add_to_csv('id_announcement.csv', [[id_auto, page_url], ])
+            if not announcement.find('i', class_='icon-sold-out'):
+                id_auto = announcement.find("div", class_="hide").get("data-id")
+                page_url = announcement.find("a", class_="m-link-ticket").get("href")
+                _add_to_csv('id_announcement.csv', [[id_auto, page_url], ])
 
 
-def parse_used_auto(soup: BeautifulSoup, link):
+def _parse_used_auto(soup, link):
     model = soup.find('h1', class_='head').get('title')
 
     price = soup.find('div', class_='price_value').findNext('strong').text
 
-    body_type = soup.find('div', class_='technical-info', id="description_v3")\
+    body_type = soup.find('div', class_='technical-info', id="description_v3") \
         .findNext('dd').text
 
-    try:
-        mileage = soup.find('span', class_='label', text='Пробіг')\
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        mileage = 'None'
+    mileage = _try_to_find_info_used_auto(soup=soup,
+                                          params_first={'name': 'span', 'class_': 'label', 'text': 'Пробіг'},
+                                          params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        engine = soup.find('span', class_='label', text='Двигун') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        engine = 'None'
+    engine = _try_to_find_info_used_auto(soup=soup,
+                                         params_first={'name': 'span', 'class_': 'label', 'text': 'Двигун'},
+                                         params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        transmission = soup.find('span', class_='label', text='Коробка передач') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        transmission = 'None'
+    transmission = _try_to_find_info_used_auto(soup=soup,
+                                               params_first={'name': 'span', 'class_': 'label',
+                                                             'text': 'Коробка передач'},
+                                               params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        wheel_drive = soup.find('span', class_='label', text='Привід') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        wheel_drive = 'None'
+    wheel_drive = _try_to_find_info_used_auto(soup=soup,
+                                              params_first={'name': 'span', 'class_': 'label', 'text': 'Привід'},
+                                              params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        color = soup.find('span', class_='label', text='Колір') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        color = 'None'
+    color = _try_to_find_info_used_auto(soup=soup,
+                                        params_first={'name': 'span', 'class_': 'label', 'text': 'Колір'},
+                                        params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        description = soup.find('dd', class_='additional-data show-line') \
-            .findNext('div', id='fore_info', class_='boxed').text
-    except AttributeError:
-        description = 'None'
+    description = _try_to_find_info_used_auto(soup=soup,
+                                              params_first={'name': 'dd', 'class_': 'additional-data show-line'},
+                                              params_second={'name': 'div', 'id': 'fore_info', 'class_': 'boxed'})
 
-    try:
-        traffic_accident = soup.find('span', class_='label', title='Скрыть', text='Участь в ДТП') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        traffic_accident = 'None'
+    traffic_accident = _try_to_find_info_used_auto(soup=soup,
+                                                   params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                                 'text': 'Участь в ДТП'},
+                                                   params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        paintwork = soup.find('span', class_='label', title='Скрыть', text='Лакофарбове покриття') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        paintwork = 'None'
+    paintwork = _try_to_find_info_used_auto(soup=soup,
+                                            params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                          'text': 'Лакофарбове покриття'},
+                                            params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        technical_condition = soup.find('span', class_='label', title='Скрыть', text='Технічний стан') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        technical_condition = 'None'
+    technical_condition = _try_to_find_info_used_auto(soup=soup,
+                                                      params_first={'name': 'span', 'class_': 'label',
+                                                                    'title': 'Скрыть',
+                                                                    'text': 'Технічний стан'},
+                                                      params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        condition = soup.find('span', class_='label', title='Скрыть', text='Стан') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        condition = 'None'
+    condition = _try_to_find_info_used_auto(soup=soup,
+                                            params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                          'text': 'Стан'},
+                                            params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        security = soup.find('span', class_='label', title='Скрыть', text='Безпека') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        security = "None"
+    security = _try_to_find_info_used_auto(soup=soup,
+                                           params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                         'text': 'Безпека'},
+                                           params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        comfort = soup.find('span', class_='label', title='Скрыть', text='Комфорт') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        comfort = 'None'
+    comfort = _try_to_find_info_used_auto(soup=soup,
+                                          params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                        'text': 'Комфорт'},
+                                          params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        multimedia = soup.find('span', class_='label', title='Скрыть', text='Мультимедіа') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        multimedia = 'None'
+    multimedia = _try_to_find_info_used_auto(soup=soup,
+                                             params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                           'text': 'Мультимедіа'},
+                                             params_second={'name': 'span', 'class_': 'argument'})
 
-    try:
-        other = soup.find('span', class_='label', title='Скрыть', text='Інше') \
-            .findNext('span', class_='argument').text
-    except AttributeError:
-        other = "None"
+    other = _try_to_find_info_used_auto(soup=soup,
+                                        params_first={'name': 'span', 'class_': 'label', 'title': 'Скрыть',
+                                                      'text': 'Інше'},
+                                        params_second={'name': 'span', 'class_': 'argument'})
 
     car_details = [model, price, body_type, mileage, engine, transmission, wheel_drive, color,
                    description, traffic_accident, paintwork, technical_condition, condition,
@@ -150,38 +147,41 @@ def parse_used_auto(soup: BeautifulSoup, link):
     return car_details
 
 
-def parse_new_auto(soup: BeautifulSoup, link):
+def _parse_new_auto(soup: BeautifulSoup, link):
     model = soup.find('h1', class_='auto-head_title bold mb-15').text
 
-    price = soup.find('div', title='Остаточну вартість уточнюйте у дилера').text
+    price = _try_to_find_info_new_auto(soup=soup,
+                                       params_first={'name': 'section', 'class_': 'price mb-15 mhide'},
+                                       params_second={'name': 'div', 'title': 'Остаточну вартість уточнюйте у дилера'})
 
     body_type = soup.find('div', class_='mb-15').findNext('div', class_='mb-15') \
         .findNext('div', class_='mb-15').text
 
     mileage = '0'
 
-    engine = soup.find('dl', class_='defines_list mb-15 unstyle') \
-        .findNext('dd', class_='defines_list_value').text
+    engine = _try_to_find_info_new_auto(soup=soup,
+                                        params_first={'name': 'dl', 'class_': 'defines_list mb-15 unstyle'},
+                                        params_second={'name': 'dd', 'class_': 'defines_list_value'})
 
-    transmission = soup.find('dt', class_='defines_list_title', text='Коробка передач') \
-        .findNext('dd', class_='defines_list_value').text
+    transmission = _try_to_find_info_new_auto(soup=soup,
+                                              params_first={'name': 'dt', 'class_': 'defines_list_title',
+                                                            'text': 'Коробка передач'},
+                                              params_second={'name': 'dd', 'class_': 'defines_list_value'})
 
-    try:
-        wheel_drive = soup.find('dt', class_='defines_list_title', text='Привід') \
-            .findNext('dd', class_='defines_list_value').text
-    except AttributeError:
-        wheel_drive = 'For more information contact the dealership'
+    wheel_drive = _try_to_find_info_new_auto(soup=soup,
+                                             params_first={'name': 'dt', 'class_': 'defines_list_title',
+                                                           'text': 'Привід'},
+                                             params_second={'name': 'dd', 'class_': 'defines_list_value'})
 
-    try:
-        color = soup.find('dt', class_='defines_list_title color', text='Колір кузова')\
-            .findNext('dd', class_='defines_list_value color').text
-    except AttributeError:
-        color = 'For change color contact the dealership'
+    color = _try_to_find_info_new_auto(soup=soup,
+                                       params_first={'name': 'dt', 'class_': 'defines_list_title color',
+                                                     'text': 'Колір кузова'},
+                                       params_second={'name': 'dd', 'class_': 'defines_list_value color'})
 
-    try:
-        description = soup.find('dd', class_='defines_list_value comment').text
-    except AttributeError:
-        description = 'For more information contact the dealership'
+    description = _try_to_find_info_new_auto(soup=soup,
+                                             params_first={'name': 'dt', 'class_': 'defines_list_title',
+                                                           'text': 'Коментар автосалону'},
+                                             params_second={'name': 'dd', 'class_': 'defines_list_value comment'})
 
     traffic_accident = 'No'
 
@@ -207,22 +207,21 @@ def parse_new_auto(soup: BeautifulSoup, link):
 
 
 def parse_detail_announcement():
-    write_to_csv('detail_announcement.csv',
-                 [['model', 'price', 'body_type', 'mileage', 'engine', 'transmission', 'wheel_drive', 'color',
-                   'description', 'traffic_accident', 'paintwork', 'technical_condition', 'condition',
-                   'security', 'comfort', 'multimedia', 'other', 'link'], ])
+    _write_to_csv('detail_announcement.csv',
+                  [['model', 'price', 'body_type', 'mileage', 'engine', 'transmission', 'wheel_drive', 'color',
+                    'description', 'traffic_accident', 'paintwork', 'technical_condition', 'condition',
+                    'security', 'comfort', 'multimedia', 'other', 'link'], ])
 
-    for announcement in read_from_csv('id_announcement.csv')[1:]:
+    for announcement in _read_from_csv('id_announcement.csv')[1:]:
         responce = requests.get(announcement[1])
         responce.raise_for_status()
         soup = BeautifulSoup(responce.content, 'lxml')
         link = responce.url
         if link.find('https://auto.ria.com/uk/newauto/'):
-            car_details = parse_used_auto(soup, link)
+            car_details = _parse_used_auto(soup, link)
         else:
-            car_details = parse_new_auto(soup, link)
-        print(link)
-        add_to_csv('detail_announcement.csv', [car_details, ])
+            car_details = _parse_new_auto(soup, link)
+        _add_to_csv('detail_announcement.csv', [car_details, ])
 
 
 parse_page()
